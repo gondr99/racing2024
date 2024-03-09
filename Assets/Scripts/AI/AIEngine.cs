@@ -23,10 +23,13 @@ public class AIEngine : MonoBehaviour
     public Vector3 centerOfMass;
     private Rigidbody _rigidbody;
 
+    private CarSensor _sensor;
+
     private void Awake()
     {
         _rigidbody = GetComponent<Rigidbody>();
         _rigidbody.centerOfMass = centerOfMass;
+        _sensor = GetComponent<CarSensor>();
     }
 
     private void Start()
@@ -70,29 +73,50 @@ public class AIEngine : MonoBehaviour
         target.y = transform.position.y;
 
         float distance = Vector3.Distance(target, transform.position);
-        Debug.Log(distance);
-        if (distance < 1f)
+        if (distance < 4f)
         {
             _currentNodeIndex = (_currentNodeIndex + 1) % _pathList.Count;
         }
+
+        int nextNodeIndex = GetNextIndex(_currentNodeIndex);
+        float nextDistance = Vector3.Distance(_pathList[nextNodeIndex].position, transform.position);
+        while (distance > nextDistance || nextDistance < 6f)
+        {
+            _currentNodeIndex = nextNodeIndex;
+            nextNodeIndex = GetNextIndex(_currentNodeIndex);
+
+            distance = nextDistance;
+            nextDistance = Vector3.Distance(_pathList[nextNodeIndex].position, transform.position);
+        }
+    }
+
+    private int GetNextIndex(int idx)
+    {
+        return (idx + 1) % _pathList.Count;
     }
 
     private void ApplySteering()
     {
+        float sensorSteering = _sensor.CheckObstacle();
+
+        
         Vector3 relativeVector = transform.InverseTransformPoint(_pathList[_currentNodeIndex].position);
         relativeVector.Normalize();
 
-
         float newSteering = relativeVector.x * _maxSteeringAngle;
-
+        
+        if (sensorSteering != 0 || _sensor.avoiding)
+        {
+            newSteering = sensorSteering * _maxSteeringAngle;
+        }
+        
         for (int i = 0; i < _wheels.Length - 2; ++i)
         {
             _wheels[i].steerAngle = newSteering;
         }
-
     }
 
-    private void Braking(bool isBrake)
+    public void Braking(bool isBrake)
     {
         float brakeValue = isBrake ? _maxBrakeTorque : 0;
         
@@ -100,6 +124,8 @@ public class AIEngine : MonoBehaviour
         {
             _wheels[i].brakeTorque = brakeValue;
         }
+        
+        Debug.Log("Brake");
     }
     
     private void AnimateWheels()
